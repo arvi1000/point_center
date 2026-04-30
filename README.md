@@ -8,18 +8,12 @@ Click on a map to place points. The geographic centroid updates live as you add 
 
 Open `index.html` in any browser. No installation, no server, no internet connection required beyond loading the map tiles.
 
-```
-open index.html       # macOS
-start index.html      # Windows
-xdg-open index.html   # Linux
-```
-
-## How it works
-
-- **Click** anywhere on the map to drop a point (blue dot)
+- **Click** anywhere on the map to drop a point
 - The **centroid** (pink dot) appears automatically once you have 2+ points, with dashed lines connecting each point to it
 - The centroid coordinates are shown in the toolbar
 - **Undo** removes the last point; **Clear** removes all points
+- You can copy/paste the points in the text box on the side
+- You can choose the map tileset in the dropdown
 
 ## Notes on accuracy
 
