@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Point Center</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 16px;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    #toolbar h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: #cba6f7;
+    }
+
+    #status {
+      flex: 1;
+      color: #a6adc8;
+    }
+
+    #centroid-display {
+      font-variant-numeric: tabular-nums;
+      color: #f38ba8;
+      font-weight: 500;
+    }
+
+    button {
+      padding: 5px 12px;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      background: #313244;
+      color: #cdd6f4;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button:hover { background: #45475a; }
+    button:disabled { opacity: 0.4; cursor: default; }
+
+    select {
+      padding: 5px 8px;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      background: #313244;
+      color: #cdd6f4;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    #map { flex: 1; }
+
+    .point-marker {
+      background: #89b4fa;
+      border: 2px solid #1e1e2e;
+      border-radius: 50%;
+      width: 12px !important;
+      height: 12px !important;
+      margin-left: -6px !important;
+      margin-top: -6px !important;
+    }
+
+    .centroid-marker {
+      background: #f38ba8;
+      border: 3px solid #1e1e2e;
+      border-radius: 50%;
+      width: 18px !important;
+      height: 18px !important;
+      margin-left: -9px !important;
+      margin-top: -9px !important;
+      box-shadow: 0 0 0 3px rgba(243,139,168,0.35);
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <h1>point center</h1>
+    <span id="status">Click the map to place points</span>
+    <span id="centroid-display"></span>
+    <select id="tile-select">
+      <option value="voyager">Voyager</option>
+      <option value="light">Light</option>
+      <option value="light_nolabels">Light (no labels)</option>
+      <option value="dark">Dark</option>
+    </select>
+    <button id="undo-btn" disabled>Undo</button>
+    <button id="clear-btn" disabled>Clear</button>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([20, 0], 2);
+
+    const TILE_STYLES = {
+      voyager:        'rastertiles/voyager',
+      light:          'light_all',
+      light_nolabels: 'light_nolabels',
+      dark:           'dark_all',
+    };
+    const CARTO_ATTR = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>';
+
+    let tileLayer = L.tileLayer(
+      `https://{s}.basemaps.cartocdn.com/${TILE_STYLES.voyager}/{z}/{x}/{y}{r}.png`,
+      { attribution: CARTO_ATTR, maxZoom: 19 }
+    ).addTo(map);
+
+    document.getElementById('tile-select').addEventListener('change', (e) => {
+      tileLayer.remove();
+      tileLayer = L.tileLayer(
+        `https://{s}.basemaps.cartocdn.com/${TILE_STYLES[e.target.value]}/{z}/{x}/{y}{r}.png`,
+        { attribution: CARTO_ATTR, maxZoom: 19 }
+      ).addTo(map);
+    });
+
+    const points = [];
+    const markers = [];
+    let centroidMarker = null;
+    let centroidLine = null;
+
+    const statusEl = document.getElementById('status');
+    const centroidEl = document.getElementById('centroid-display');
+    const undoBtn = document.getElementById('undo-btn');
+    const clearBtn = document.getElementById('clear-btn');
+
+    function makeIcon(cls) {
+      return L.divIcon({ className: cls, iconSize: null });
+    }
+
+    function centroid(pts) {
+      const lat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
+      const lng = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
+      return { lat, lng };
+    }
+
+    function fmtCoord(n) { return n.toFixed(5); }
+
+    function update() {
+      // remove old centroid marker + lines
+      if (centroidMarker) { centroidMarker.remove(); centroidMarker = null; }
+      if (centroidLine) { centroidLine.remove(); centroidLine = null; }
+
+      const n = points.length;
+      undoBtn.disabled = n === 0;
+      clearBtn.disabled = n === 0;
+
+      if (n === 0) {
+        statusEl.textContent = 'Click the map to place points';
+        centroidEl.textContent = '';
+        return;
+      }
+
+      statusEl.textContent = `${n} point${n === 1 ? '' : 's'}`;
+
+      if (n === 1) {
+        centroidEl.textContent = '';
+        return;
+      }
+
+      const c = centroid(points);
+
+      // lines from each point to centroid
+      const lineCoords = points.map(p => [[p.lat, p.lng], [c.lat, c.lng]]);
+      centroidLine = L.polyline(lineCoords, {
+        color: '#f38ba8',
+        weight: 1.5,
+        opacity: 0.5,
+        dashArray: '4 4',
+      }).addTo(map);
+
+      centroidMarker = L.marker([c.lat, c.lng], {
+        icon: makeIcon('centroid-marker'),
+        title: 'centroid',
+        zIndexOffset: 1000,
+      }).addTo(map);
+
+      centroidEl.textContent = `centroid: ${fmtCoord(c.lat)}, ${fmtCoord(c.lng)}`;
+    }
+
+    map.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      points.push({ lat, lng });
+      const m = L.marker([lat, lng], {
+        icon: makeIcon('point-marker'),
+        title: `Point ${points.length}: ${fmtCoord(lat)}, ${fmtCoord(lng)}`,
+      }).addTo(map);
+      markers.push(m);
+      update();
+    });
+
+    undoBtn.addEventListener('click', () => {
+      if (points.length === 0) return;
+      points.pop();
+      markers.pop().remove();
+      update();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      points.length = 0;
+      markers.forEach(m => m.remove());
+      markers.length = 0;
+      update();
+    });
+  </script>
+</body>
+</html>
