@@ -4,6 +4,9 @@ Click on a map to place points. The geographic centroid updates live as you add 
 
 **Test it out: https://arvi1000.github.io/point_center/**
 
+![example](example.jpg)
+*The Three Safeway Problem*
+
 ## Usage
 
 Open `index.html` in any browser. No installation, no server, no internet connection required beyond loading the map tiles.
