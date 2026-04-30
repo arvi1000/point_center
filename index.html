@@ -68,7 +68,35 @@
       font-size: 13px;
     }
 
+    #main { display: flex; flex: 1; overflow: hidden; }
     #map { flex: 1; }
+
+    #coords-panel {
+      width: 190px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px;
+      background: #181825;
+      border-left: 1px solid #313244;
+    }
+
+    #coords-panel label { font-size: 12px; color: #a6adc8; }
+
+    #coords-box {
+      flex: 1;
+      resize: none;
+      background: #313244;
+      color: #cdd6f4;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 6px;
+      line-height: 1.6;
+    }
+
+    #coords-box:focus { outline: none; border-color: #cba6f7; }
 
     .point-marker {
       background: #89b4fa;
@@ -107,7 +135,13 @@
     <button id="undo-btn" disabled>Undo</button>
     <button id="clear-btn" disabled>Clear</button>
   </div>
-  <div id="map"></div>
+  <div id="main">
+    <div id="map"></div>
+    <div id="coords-panel">
+      <label for="coords-box">Points (lat, lng)</label>
+      <textarea id="coords-box" spellcheck="false" placeholder="37.12345,-122.12345&#10;37.23456,-122.23456"></textarea>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.js"></script>
@@ -152,6 +186,7 @@
     const centroidEl = document.getElementById('centroid-display');
     const undoBtn = document.getElementById('undo-btn');
     const clearBtn = document.getElementById('clear-btn');
+    const coordsBox = document.getElementById('coords-box');
 
     function makeIcon(cls) {
       return L.divIcon({ className: cls, iconSize: null });
@@ -165,8 +200,7 @@
 
     function fmtCoord(n) { return n.toFixed(5); }
 
-    function update() {
-      // remove old centroid marker + lines
+    function updateMap() {
       if (centroidMarker) { centroidMarker.remove(); centroidMarker = null; }
       if (centroidLine) { centroidLine.remove(); centroidLine = null; }
 
@@ -189,7 +223,6 @@
 
       const c = centroid(points);
 
-      // lines from each point to centroid
       const lineCoords = points.map(p => [[p.lat, p.lng], [c.lat, c.lng]]);
       centroidLine = L.polyline(lineCoords, {
         color: '#f38ba8',
@@ -205,6 +238,11 @@
       }).addTo(map);
 
       centroidEl.textContent = `centroid: ${fmtCoord(c.lat)}, ${fmtCoord(c.lng)}`;
+    }
+
+    function update() {
+      updateMap();
+      coordsBox.value = points.map(p => `${fmtCoord(p.lat)},${fmtCoord(p.lng)}`).join('\n');
     }
 
     map.on('click', (e) => {
@@ -230,6 +268,28 @@
       markers.forEach(m => m.remove());
       markers.length = 0;
       update();
+    });
+
+    coordsBox.addEventListener('input', () => {
+      const parsed = coordsBox.value.split('\n').flatMap(line => {
+        const parts = line.trim().split(/[\s,]+/);
+        if (parts.length < 2) return [];
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
+        if (isNaN(lat) || isNaN(lng)) return [];
+        return [{ lat, lng }];
+      });
+      markers.forEach(m => m.remove());
+      markers.length = 0;
+      points.length = 0;
+      for (const p of parsed) {
+        points.push(p);
+        markers.push(L.marker([p.lat, p.lng], {
+          icon: makeIcon('point-marker'),
+          title: `Point ${points.length}: ${fmtCoord(p.lat)}, ${fmtCoord(p.lng)}`,
+        }).addTo(map));
+      }
+      updateMap();
     });
   </script>
 </body>
